@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lifeboat-api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd backend && exec .venv/bin/uvicorn --factory app.main:app_factory --host 127.0.0.1 --port 8000"],
+      "port": 8000
+    },
+    {
+      "name": "lifeboat-web",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd frontend && exec npm run dev -- --port 5173 --strictPort"],
+      "port": 5173
+    }
+  ]
+}

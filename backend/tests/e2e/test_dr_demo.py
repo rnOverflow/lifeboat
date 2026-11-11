@@ -3,6 +3,7 @@
 Healthy AWS -> simulate AWS outage -> detect -> check RTO/RPO -> validate Azure -> approve -> promote ->
 switch traffic -> verify -> RTO/RPO -> report -> recover AWS -> failback -> verify
 """
+
 import pytest
 
 pytestmark = pytest.mark.e2e
@@ -27,8 +28,10 @@ def test_full_dr_lifecycle(api):
     ready_before = st["readiness"]["score"]
 
     # 2. Simulate AWS outage
-    assert api.post("/api/v1/simulator/faults", json={"region": AWS, "fault_type": "cloud_outage"},
-                    headers=op).status_code == 201
+    assert (
+        api.post("/api/v1/simulator/faults", json={"region": AWS, "fault_type": "cloud_outage"}, headers=op).status_code
+        == 201
+    )
 
     # 3. Detect failure (3 consecutive failed probes) -> incident + auto-initiated failover run
     api.tick(2)
@@ -117,7 +120,18 @@ def test_full_dr_lifecycle(api):
     # Every step is in a valid tamper-evident audit trail
     audit = api.get("/api/v1/audit?limit=500", headers=ap).json()
     actions = {a["action"] for a in audit}
-    assert {"fault.inject", "incident.open", "failover.initiate", "failover.approve", "failover.promote",
-            "traffic.switch", "failover.completed", "fault.clear", "failback.initiate", "failback.resync",
-            "failback.approve", "failback.completed"} <= actions
+    assert {
+        "fault.inject",
+        "incident.open",
+        "failover.initiate",
+        "failover.approve",
+        "failover.promote",
+        "traffic.switch",
+        "failover.completed",
+        "fault.clear",
+        "failback.initiate",
+        "failback.resync",
+        "failback.approve",
+        "failback.completed",
+    } <= actions
     assert api.get("/api/v1/audit/verify", headers=ap).json()["valid"]

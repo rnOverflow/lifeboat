@@ -1,0 +1,25 @@
+# AKS deployment (recommended home for the DR control plane: outside the primary's failure domain).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - external-secret.yaml
+images:
+  - { name: ghcr.io/your-org/lifeboat-api, newTag: "1.0.0" }
+  - { name: ghcr.io/your-org/lifeboat-web, newTag: "1.0.0" }
+patches:
+  - target: { kind: ServiceAccount, name: lifeboat-api }
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value: { azure.workload.identity/client-id: "00000000-0000-0000-0000-000000000000" }
+  - target: { kind: Deployment, name: lifeboat-api }
+    patch: |-
+      - op: add
+        path: /spec/template/metadata/labels/azure.workload.identity~1use
+        value: "true"
+  - target: { kind: Ingress, name: lifeboat }
+    patch: |-
+      - op: add
+        path: /spec/ingressClassName
+        value: webapprouting.kubernetes.azure.com

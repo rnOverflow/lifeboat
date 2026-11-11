@@ -81,8 +81,12 @@ def customer_impact(run: RecoveryRun, workload: dict[str, Any] | None) -> dict[s
     window_start = aware(run.outage_started_at) or aware(run.created_at)
     ongoing = workload.get("outage_started_at")
     if ongoing and restored and ongoing >= window_start.timestamp() - 5:
-        return {"started_at": ongoing, "duration_s": round(restored.timestamp() - ongoing, 3),
-                "failed_writes": workload.get("outage_failed", 0), "basis": "first failed write -> verified recovery"}
+        return {
+            "started_at": ongoing,
+            "duration_s": round(restored.timestamp() - ongoing, 3),
+            "failed_writes": workload.get("outage_failed", 0),
+            "basis": "first failed write -> verified recovery",
+        }
     last = workload.get("last_outage")
     if last and last.get("started_at", 0) >= window_start.timestamp() - 5:
         return {**last, "basis": "first failed write -> first successful write"}

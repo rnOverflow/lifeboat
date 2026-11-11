@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: lifeboat
+labels:
+  - pairs: { app.kubernetes.io/part-of: lifeboat }
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - api.yaml
+  - web.yaml
+  - networkpolicy.yaml
+  - ingress.yaml

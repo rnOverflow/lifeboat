@@ -34,9 +34,18 @@ def backup_dir():
 
 @pytest.fixture
 def settings(backup_dir) -> Settings:
-    return Settings(env="test", database_url=TEST_DB, scheduler_enabled=False, jwt_secret=secrets.token_urlsafe(32),
-                    sim_replication_delay_s=2.0, sim_write_interval_s=1.0, backup_dir=backup_dir,
-                    detection_threshold=3, recovery_threshold=2, _env_file=None)
+    return Settings(
+        env="test",
+        database_url=TEST_DB,
+        scheduler_enabled=False,
+        jwt_secret=secrets.token_urlsafe(32),
+        sim_replication_delay_s=2.0,
+        sim_write_interval_s=1.0,
+        backup_dir=backup_dir,
+        detection_threshold=3,
+        recovery_threshold=2,
+        _env_file=None,
+    )
 
 
 @pytest.fixture

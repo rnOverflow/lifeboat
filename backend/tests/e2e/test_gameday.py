@@ -7,8 +7,11 @@ AWS, AZ = "aws-us-east-1", "azure-eastus"
 def _run_gameday(api, scenario, region=None, auto_approve=True, ticks=40):
     hdr = api.as_("admin")
     api.tick(5)
-    r = api.post("/api/v1/gamedays", json={"name": f"GD {scenario}", "scenario": scenario, "target_region": region,
-                                           "auto_approve": auto_approve}, headers=hdr)
+    r = api.post(
+        "/api/v1/gamedays",
+        json={"name": f"GD {scenario}", "scenario": scenario, "target_region": region, "auto_approve": auto_approve},
+        headers=hdr,
+    )
     assert r.status_code == 201, r.text
     gid = r.json()["id"]
     for _ in range(ticks):
@@ -56,10 +59,17 @@ def test_gameday_replication_failure_detected_no_failover(api):
 def test_gameday_without_preapproval_waits_for_human(api):
     hdr, ap = api.as_("operator"), api.as_("approver")
     api.tick(5)
-    assert api.post("/api/v1/gamedays", json={"name": "preapproved", "scenario": "cloud_outage", "auto_approve": True},
-                    headers=hdr).status_code == 403
-    gid = api.post("/api/v1/gamedays", json={"name": "manual approval", "scenario": "cloud_outage"},
-                   headers=hdr).json()["id"]
+    assert (
+        api.post(
+            "/api/v1/gamedays",
+            json={"name": "preapproved", "scenario": "cloud_outage", "auto_approve": True},
+            headers=hdr,
+        ).status_code
+        == 403
+    )
+    gid = api.post(
+        "/api/v1/gamedays", json={"name": "manual approval", "scenario": "cloud_outage"}, headers=hdr
+    ).json()["id"]
     api.tick(5)
     g = api.get(f"/api/v1/gamedays/{gid}", headers=hdr).json()
     assert g["phase"] == "respond"
@@ -85,8 +95,9 @@ def test_gameday_without_preapproval_waits_for_human(api):
 def test_gameday_abort_clears_faults(api):
     hdr = api.as_("admin")
     api.tick(3)
-    gid = api.post("/api/v1/gamedays", json={"name": "abort me", "scenario": "network_failure",
-                                             "target_region": AZ}, headers=hdr).json()["id"]
+    gid = api.post(
+        "/api/v1/gamedays", json={"name": "abort me", "scenario": "network_failure", "target_region": AZ}, headers=hdr
+    ).json()["id"]
     api.tick(1)
     g = api.post(f"/api/v1/gamedays/{gid}/abort", headers=hdr).json()
     assert g["status"] == "aborted"

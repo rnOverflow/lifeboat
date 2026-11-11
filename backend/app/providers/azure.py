@@ -24,8 +24,16 @@ from app.providers.pgrepl import PostgresEndpoint, wait_caught_up
 class AzureRegion(RegionProvider):
     cloud = "azure"
 
-    def __init__(self, name: str, subscription_id: str, resource_group: str, pg_server: str, app_url: str, dsn: str,
-                 pg_client: Any = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        subscription_id: str,
+        resource_group: str,
+        pg_server: str,
+        app_url: str,
+        dsn: str,
+        pg_client: Any = None,
+    ) -> None:
         self.name = name
         self.display_name = "Azure East US"
         self.subscription_id = subscription_id
@@ -40,8 +48,14 @@ class AzureRegion(RegionProvider):
     def from_settings(cls, st: Settings) -> AzureRegion:
         assert st.azure_subscription_id and st.azure_resource_group and st.azure_pg_server
         assert st.azure_app_endpoint and st.secondary_db_dsn
-        return cls(st.secondary_region, st.azure_subscription_id, st.azure_resource_group, st.azure_pg_server,
-                   st.azure_app_endpoint, st.secondary_db_dsn)
+        return cls(
+            st.secondary_region,
+            st.azure_subscription_id,
+            st.azure_resource_group,
+            st.azure_pg_server,
+            st.azure_app_endpoint,
+            st.secondary_db_dsn,
+        )
 
     @property
     def pg_client(self) -> Any:
@@ -112,8 +126,13 @@ class AzureRegion(RegionProvider):
             res = poller.result(timeout=600)
         except Exception as e:  # noqa: BLE001
             raise ProviderError(f"on-demand backup failed: {type(e).__name__}") from e
-        return BackupArtifact(location=f"azure-pg-backup:{name}", size_bytes=0, record_count=0, max_seq=0,
-                              checksum_sha256=str(getattr(res, "id", name)).encode().hex()[:64].ljust(64, "0"))
+        return BackupArtifact(
+            location=f"azure-pg-backup:{name}",
+            size_bytes=0,
+            record_count=0,
+            max_seq=0,
+            checksum_sha256=str(getattr(res, "id", name)).encode().hex()[:64].ljust(64, "0"),
+        )
 
     def verify_backup(self, location: str, expected_checksum: str) -> BackupVerification:
         name = location.removeprefix("azure-pg-backup:")
@@ -123,8 +142,9 @@ class AzureRegion(RegionProvider):
             return BackupVerification(False, False, False, issues=[f"backup lookup failed: {type(e).__name__}"])
         fp = str(getattr(b, "id", name)).encode().hex()[:64].ljust(64, "0")
         ok = fp == expected_checksum
-        return BackupVerification(ok=ok, checksum_match=ok, restorable=ok,
-                                  issues=[] if ok else ["backup identity mismatch"])
+        return BackupVerification(
+            ok=ok, checksum_match=ok, restorable=ok, issues=[] if ok else ["backup identity mismatch"]
+        )
 
     def synthetic_transaction(self) -> SyntheticResult:
         return self.pg.heartbeat()

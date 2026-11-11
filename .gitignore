@@ -16,3 +16,5 @@ frontend/dist/
 *.tfstate.*
 .terraform.lock.hcl.bak
 *.tfplan
+reports/
+infra/terraform/modules/*/.terraform.lock.hcl

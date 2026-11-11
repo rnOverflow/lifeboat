@@ -1,0 +1,68 @@
+# Local full stack: API + dashboard + PostgreSQL + Prometheus + Grafana + OpenTelemetry Collector + Jaeger.
+# Secrets come from .env (generate with scripts/dev-env.sh). Nothing is hardcoded.
+name: lifeboat
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: lifeboat
+      POSTGRES_USER: lifeboat
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run scripts/dev-env.sh}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lifeboat -d lifeboat"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    depends_on:
+      db: { condition: service_healthy }
+    env_file: .env
+    environment:
+      LIFEBOAT_ENV: prod
+      LIFEBOAT_DATABASE_URL: postgresql+psycopg://lifeboat:${POSTGRES_PASSWORD}@db:5432/lifeboat
+      LIFEBOAT_CORS_ORIGINS: '["http://localhost:8080"]'
+      LIFEBOAT_OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      LIFEBOAT_BACKUP_DIR: /app/var/backups
+    volumes: [backups:/app/var/backups]
+    ports: ["8000:8000"]
+
+  web:
+    build: ./frontend
+    depends_on: [api]
+    ports: ["8080:8080"]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.113.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes: ["./deploy/monitoring/otel-collector.yaml:/etc/otelcol/config.yaml:ro"]
+    depends_on: [jaeger]
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment: { COLLECTOR_OTLP_ENABLED: "true" }
+    ports: ["16686:16686"]
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--web.enable-lifecycle"]
+    volumes:
+      - ./deploy/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?run scripts/dev-env.sh}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./deploy/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3000:3000"]
+    depends_on: [prometheus]
+
+volumes:
+  pgdata:
+  backups:

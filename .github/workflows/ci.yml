@@ -1,0 +1,112 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lifeboat
+          POSTGRES_PASSWORD: ci-only-ephemeral
+          POSTGRES_DB: lifeboat_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U lifeboat" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      LIFEBOAT_TEST_DATABASE_URL: postgresql+psycopg://lifeboat:ci-only-ephemeral@localhost:5432/lifeboat_test
+      LIFEBOAT_DATABASE_URL: postgresql+psycopg://lifeboat:ci-only-ephemeral@localhost:5432/lifeboat_test
+      COVERAGE_CORE: sysmon
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv venv -p 3.12 && uv pip install -e ".[dev,llm]"
+      - name: Lint
+        run: .venv/bin/ruff check . && .venv/bin/ruff format --check .
+      - name: Migrations apply and match models
+        run: .venv/bin/alembic upgrade head && .venv/bin/alembic check && .venv/bin/alembic downgrade base
+      - name: Unit + integration + end-to-end DR tests
+        run: .venv/bin/pytest -q --cov=app --cov-report=term-missing --cov-report=xml
+      - uses: actions/upload-artifact@v4
+        with: { name: coverage, path: backend/coverage.xml }
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - run: npm ci
+      - run: npx oxlint src
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: terraform fmt
+        run: terraform fmt -recursive -check infra/terraform
+      - name: terraform validate
+        run: |
+          for d in infra/terraform/modules/* infra/terraform/envs/*; do
+            echo "::group::$d"; terraform -chdir=$d init -backend=false -input=false && terraform -chdir=$d validate; echo "::endgroup::"
+          done
+      - name: Kubernetes manifests (kustomize + kubeconform)
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz
+          for o in base overlays/aws overlays/azure; do
+            kubectl kustomize deploy/k8s/$o | ./kubeconform -strict -summary -ignore-missing-schemas -kubernetes-version 1.31.0 -
+          done
+      - name: Prometheus rules
+        run: docker run --rm -v "$PWD/deploy/monitoring:/m" --entrypoint promtool prom/prometheus:v2.55.1 check rules /m/alerts.yml
+
+  images:
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.ref == 'refs/heads/main'
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: ghcr.io/${{ github.repository_owner }}/lifeboat-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: ghcr.io/${{ github.repository_owner }}/lifeboat-web:${{ github.sha }}
+
+  compose-e2e:
+    needs: [images]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start full stack
+        run: |
+          ./scripts/dev-env.sh
+          docker compose up -d --build --wait db api web
+      - name: Live end-to-end DR demo over HTTP
+        run: python3 scripts/e2e_demo.py --api http://localhost:8000
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs api

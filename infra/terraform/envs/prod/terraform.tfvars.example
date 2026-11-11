@@ -1,0 +1,6 @@
+azure_subscription_id = "00000000-0000-0000-0000-000000000000"
+zone_name             = "example.com"
+record_name           = "app.example.com"
+aws_endpoint_host     = "lifeboat-alb-123.us-east-1.elb.amazonaws.com"
+azure_endpoint_host   = "lifeboat-fd.azurefd.net"
+azure_egress_cidrs    = ["20.0.0.0/32"]

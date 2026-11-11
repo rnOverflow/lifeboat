@@ -10,8 +10,11 @@ from tests.conftest import run_ticks
 
 def _state_fingerprint(rt):
     with rt.db.session() as s:
-        return (rt.traffic.active_region(), s.scalar(select(func.count()).select_from(RecoveryRun)),
-                s.scalar(select(func.count()).select_from(SimFault)))
+        return (
+            rt.traffic.active_region(),
+            s.scalar(select(func.count()).select_from(RecoveryRun)),
+            s.scalar(select(func.count()).select_from(SimFault)),
+        )
 
 
 def test_rules_copilot_answers_from_real_state_and_never_mutates(rt, clock):
@@ -56,10 +59,19 @@ def test_llm_loop_executes_only_read_tools(rt, clock):
     run_ticks(rt, clock, 3)
     rt.settings.anthropic_api_key = "test-key-not-real"
     responses = [
-        SimpleNamespace(stop_reason="tool_use", model="m", content=[
-            _block(type="tool_use", id="t1", name="get_readiness", input={}),
-            _block(type="tool_use", id="t2", name="propose_action",
-                   input={"action": "create_backup", "reason": "no backups"})]),
+        SimpleNamespace(
+            stop_reason="tool_use",
+            model="m",
+            content=[
+                _block(type="tool_use", id="t1", name="get_readiness", input={}),
+                _block(
+                    type="tool_use",
+                    id="t2",
+                    name="propose_action",
+                    input={"action": "create_backup", "reason": "no backups"},
+                ),
+            ],
+        ),
         SimpleNamespace(stop_reason="end_turn", model="m", content=[_block(type="text", text="Score is fine.")]),
     ]
     fake = MagicMock()

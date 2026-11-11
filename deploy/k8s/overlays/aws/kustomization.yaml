@@ -1,0 +1,28 @@
+# EKS deployment. Secrets synced from AWS Secrets Manager via External Secrets Operator; IRSA grants the
+# API the RDS / Route 53 / snapshot permissions defined in infra/terraform/modules/aws-region.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - external-secret.yaml
+images:
+  - { name: ghcr.io/your-org/lifeboat-api, newTag: "1.0.0" }
+  - { name: ghcr.io/your-org/lifeboat-web, newTag: "1.0.0" }
+patches:
+  - target: { kind: ServiceAccount, name: lifeboat-api }
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value: { eks.amazonaws.com/role-arn: "arn:aws:iam::111122223333:role/lifeboat-control-plane" }
+  - target: { kind: Ingress, name: lifeboat }
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          alb.ingress.kubernetes.io/scheme: internet-facing
+          alb.ingress.kubernetes.io/target-type: ip
+          alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+          alb.ingress.kubernetes.io/ssl-redirect: "443"
+      - op: add
+        path: /spec/ingressClassName
+        value: alb

@@ -40,8 +40,16 @@ def http_probe(url: str, timeout: float = 3.0) -> tuple[ComponentHealth, Compone
 class AwsRegion(RegionProvider):
     cloud = "aws"
 
-    def __init__(self, name: str, region: str, rds_instance_id: str, app_url: str, dsn: str,
-                 backup_bucket: str | None = None, session: Any = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        region: str,
+        rds_instance_id: str,
+        app_url: str,
+        dsn: str,
+        backup_bucket: str | None = None,
+        session: Any = None,
+    ) -> None:
         import boto3
 
         self.name = name
@@ -56,8 +64,14 @@ class AwsRegion(RegionProvider):
     @classmethod
     def from_settings(cls, st: Settings) -> AwsRegion:
         assert st.aws_rds_instance_id and st.aws_app_endpoint and st.primary_db_dsn
-        return cls(st.primary_region, st.aws_region, st.aws_rds_instance_id, st.aws_app_endpoint, st.primary_db_dsn,
-                   st.aws_backup_bucket)
+        return cls(
+            st.primary_region,
+            st.aws_region,
+            st.aws_rds_instance_id,
+            st.aws_app_endpoint,
+            st.primary_db_dsn,
+            st.aws_backup_bucket,
+        )
 
     def _rds_status(self) -> tuple[str, dict[str, Any]]:
         try:
@@ -127,9 +141,13 @@ class AwsRegion(RegionProvider):
         except Exception as e:  # noqa: BLE001
             raise ProviderError(f"create_db_snapshot failed: {type(e).__name__}") from e
         arn = snap["DBSnapshot"]["DBSnapshotArn"]
-        return BackupArtifact(location=f"rds-snapshot:{snap_id}", size_bytes=snap["DBSnapshot"].get(
-            "AllocatedStorage", 0) * 1024**3, record_count=0, max_seq=0,
-            checksum_sha256=hashlib.sha256(arn.encode()).hexdigest())
+        return BackupArtifact(
+            location=f"rds-snapshot:{snap_id}",
+            size_bytes=snap["DBSnapshot"].get("AllocatedStorage", 0) * 1024**3,
+            record_count=0,
+            max_seq=0,
+            checksum_sha256=hashlib.sha256(arn.encode()).hexdigest(),
+        )
 
     def verify_backup(self, location: str, expected_checksum: str) -> BackupVerification:
         t0 = time.perf_counter()
@@ -146,8 +164,13 @@ class AwsRegion(RegionProvider):
             issues.append(f"snapshot status {snap['Status']}")
         if not snap.get("Encrypted", False):
             issues.append("snapshot is not encrypted")
-        return BackupVerification(ok=not issues, checksum_match=fp_ok, restorable=snap["Status"] == "available",
-                                  issues=issues, duration_ms=round((time.perf_counter() - t0) * 1000, 2))
+        return BackupVerification(
+            ok=not issues,
+            checksum_match=fp_ok,
+            restorable=snap["Status"] == "available",
+            issues=issues,
+            duration_ms=round((time.perf_counter() - t0) * 1000, 2),
+        )
 
     def synthetic_transaction(self) -> SyntheticResult:
         return self.pg.heartbeat()
@@ -159,8 +182,9 @@ class AwsRegion(RegionProvider):
 class Route53TrafficManager(TrafficManager):
     """Active/standby steering with a single low-TTL CNAME that the platform UPSERTs on failover."""
 
-    def __init__(self, zone_id: str, record_name: str, endpoints: dict[str, str], ttl: int = 30,
-                 session: Any = None) -> None:
+    def __init__(
+        self, zone_id: str, record_name: str, endpoints: dict[str, str], ttl: int = 30, session: Any = None
+    ) -> None:
         import boto3
 
         self.zone_id = zone_id
@@ -175,8 +199,9 @@ class Route53TrafficManager(TrafficManager):
         return cls(st.aws_route53_zone_id, st.aws_record_name, endpoints)
 
     def active_region(self) -> str:
-        rrs = self.r53.list_resource_record_sets(HostedZoneId=self.zone_id, StartRecordName=self.record,
-                                                 StartRecordType="CNAME", MaxItems="1")["ResourceRecordSets"]
+        rrs = self.r53.list_resource_record_sets(
+            HostedZoneId=self.zone_id, StartRecordName=self.record, StartRecordType="CNAME", MaxItems="1"
+        )["ResourceRecordSets"]
         if not rrs or rrs[0]["Name"] != self.record:
             raise ProviderError(f"record {self.record} not found")
         target = rrs[0]["ResourceRecords"][0]["Value"].rstrip(".")
@@ -187,9 +212,21 @@ class Route53TrafficManager(TrafficManager):
 
     def switch_to(self, region: str) -> dict[str, Any]:
         prev = self.active_region()
-        resp = self.r53.change_resource_record_sets(HostedZoneId=self.zone_id, ChangeBatch={
-            "Comment": f"lifeboat failover {prev} -> {region}",
-            "Changes": [{"Action": "UPSERT", "ResourceRecordSet": {
-                "Name": self.record, "Type": "CNAME", "TTL": self.ttl,
-                "ResourceRecords": [{"Value": self.endpoints[region]}]}}]})
+        resp = self.r53.change_resource_record_sets(
+            HostedZoneId=self.zone_id,
+            ChangeBatch={
+                "Comment": f"lifeboat failover {prev} -> {region}",
+                "Changes": [
+                    {
+                        "Action": "UPSERT",
+                        "ResourceRecordSet": {
+                            "Name": self.record,
+                            "Type": "CNAME",
+                            "TTL": self.ttl,
+                            "ResourceRecords": [{"Value": self.endpoints[region]}],
+                        },
+                    }
+                ],
+            },
+        )
         return {"from": prev, "to": region, "change_id": resp["ChangeInfo"]["Id"], "ttl": self.ttl}

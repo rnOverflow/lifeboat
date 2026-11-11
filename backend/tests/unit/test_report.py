@@ -6,14 +6,33 @@ from tests.factories import NOW
 
 
 def _run(approve_after: float, rpo: float, lost: int) -> RecoveryRun:
-    r = RecoveryRun(id=7, kind=RunKind.FAILOVER, status=RunStatus.COMPLETED, source_region="a", target_region="b",
-                    reason="t", initiated_by="op", approved_by="ap", created_at=NOW,
-                    outage_started_at=NOW, detected_at=NOW + timedelta(seconds=3),
-                    approved_at=NOW + timedelta(seconds=3 + approve_after),
-                    service_restored_at=NOW + timedelta(seconds=5 + approve_after),
-                    metrics={"rpo_s": rpo, "data_loss_txns": lost, "planned": False})
-    r.steps = [RunStep(position=0, name="promote", title="Promote", status=StepStatus.SUCCEEDED,
-                       started_at=NOW + timedelta(seconds=4 + approve_after), finished_at=NOW, output={})]
+    r = RecoveryRun(
+        id=7,
+        kind=RunKind.FAILOVER,
+        status=RunStatus.COMPLETED,
+        source_region="a",
+        target_region="b",
+        reason="t",
+        initiated_by="op",
+        approved_by="ap",
+        created_at=NOW,
+        outage_started_at=NOW,
+        detected_at=NOW + timedelta(seconds=3),
+        approved_at=NOW + timedelta(seconds=3 + approve_after),
+        service_restored_at=NOW + timedelta(seconds=5 + approve_after),
+        metrics={"rpo_s": rpo, "data_loss_txns": lost, "planned": False},
+    )
+    r.steps = [
+        RunStep(
+            position=0,
+            name="promote",
+            title="Promote",
+            status=StepStatus.SUCCEEDED,
+            started_at=NOW + timedelta(seconds=4 + approve_after),
+            finished_at=NOW,
+            output={},
+        )
+    ]
     return r
 
 

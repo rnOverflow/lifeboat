@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lifeboat-config
+data:
+  LIFEBOAT_ENV: prod
+  LIFEBOAT_PROVIDER_MODE: local          # set to "cloud" in overlays once cloud resources exist
+  LIFEBOAT_TICK_INTERVAL_S: "1"
+  LIFEBOAT_DETECTION_THRESHOLD: "3"
+  LIFEBOAT_BACKUP_DIR: /app/var/backups
+  LIFEBOAT_OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability:4318

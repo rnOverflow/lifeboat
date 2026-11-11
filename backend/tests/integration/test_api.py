@@ -31,18 +31,39 @@ def test_me_and_security_headers(api):
     assert r.headers["X-Frame-Options"] == "DENY" and r.headers["Cache-Control"] == "no-store"
 
 
-@pytest.mark.parametrize("user,method,path,body,expected", [
-    ("viewer", "post", "/api/v1/simulator/faults", {"region": "aws-us-east-1", "fault_type": "cloud_outage"}, 403),
-    ("viewer", "post", "/api/v1/backups", {}, 403),
-    ("viewer", "post", "/api/v1/runs/failover", {"reason": "nope"}, 403),
-    ("viewer", "get", "/api/v1/audit", None, 403),
-    ("operator", "post", "/api/v1/runs/1/approve", {"comment": ""}, 403),
-    ("operator", "put", "/api/v1/policy", {"rto_target_s": 60, "rpo_target_s": 5, "max_replication_lag_s": 5,
-                                            "backup_max_age_s": 600, "auto_initiate_failover": True,
-                                            "require_approval": False, "two_person_rule": False}, 403),
-    ("approver", "post", "/api/v1/simulator/faults", {"region": "aws-us-east-1", "fault_type": "cloud_outage"}, 403),
-    ("operator", "get", "/api/v1/users", None, 403),
-])
+@pytest.mark.parametrize(
+    "user,method,path,body,expected",
+    [
+        ("viewer", "post", "/api/v1/simulator/faults", {"region": "aws-us-east-1", "fault_type": "cloud_outage"}, 403),
+        ("viewer", "post", "/api/v1/backups", {}, 403),
+        ("viewer", "post", "/api/v1/runs/failover", {"reason": "nope"}, 403),
+        ("viewer", "get", "/api/v1/audit", None, 403),
+        ("operator", "post", "/api/v1/runs/1/approve", {"comment": ""}, 403),
+        (
+            "operator",
+            "put",
+            "/api/v1/policy",
+            {
+                "rto_target_s": 60,
+                "rpo_target_s": 5,
+                "max_replication_lag_s": 5,
+                "backup_max_age_s": 600,
+                "auto_initiate_failover": True,
+                "require_approval": False,
+                "two_person_rule": False,
+            },
+            403,
+        ),
+        (
+            "approver",
+            "post",
+            "/api/v1/simulator/faults",
+            {"region": "aws-us-east-1", "fault_type": "cloud_outage"},
+            403,
+        ),
+        ("operator", "get", "/api/v1/users", None, 403),
+    ],
+)
 def test_rbac_denials_are_enforced_and_audited(api, user, method, path, body, expected):
     kw = {"headers": api.as_(user)}
     if body is not None:
@@ -84,8 +105,9 @@ def test_backup_lifecycle_and_corruption(api):
 
 def test_fault_injection_changes_state(api):
     op = api.as_("operator")
-    r = api.post("/api/v1/simulator/faults", json={"region": "azure-eastus", "fault_type": "network_failure"},
-                 headers=op)
+    r = api.post(
+        "/api/v1/simulator/faults", json={"region": "azure-eastus", "fault_type": "network_failure"}, headers=op
+    )
     assert r.status_code == 201
     api.tick(3)
     st = api.get("/api/v1/status", headers=op).json()
@@ -95,13 +117,21 @@ def test_fault_injection_changes_state(api):
     assert api.post("/api/v1/simulator/clear", json={"region": "azure-eastus"}, headers=op).json()["cleared"] == 1
     api.tick(2)
     assert {x["name"]: x["status"] for x in api.get("/api/v1/status", headers=op).json()["regions"]}[
-        "azure-eastus"] == "up"
+        "azure-eastus"
+    ] == "up"
 
 
 def test_policy_update_and_validation(api):
     admin = api.as_("admin")
-    body = {"rto_target_s": 120, "rpo_target_s": 10, "max_replication_lag_s": 5, "backup_max_age_s": 600,
-            "auto_initiate_failover": False, "require_approval": True, "two_person_rule": True}
+    body = {
+        "rto_target_s": 120,
+        "rpo_target_s": 10,
+        "max_replication_lag_s": 5,
+        "backup_max_age_s": 600,
+        "auto_initiate_failover": False,
+        "require_approval": True,
+        "two_person_rule": True,
+    }
     assert api.put("/api/v1/policy", json=body, headers=admin).status_code == 200
     assert api.get("/api/v1/policy", headers=admin).json()["rto_target_s"] == 120
     assert api.put("/api/v1/policy", json={**body, "rto_target_s": 1}, headers=admin).status_code == 422
@@ -109,11 +139,18 @@ def test_policy_update_and_validation(api):
 
 def test_user_management(api):
     admin = api.as_("admin")
-    r = api.post("/api/v1/users", json={"username": "sre.jane", "password": "a-long-enough-pass", "role": "operator"},
-                 headers=admin)
+    r = api.post(
+        "/api/v1/users",
+        json={"username": "sre.jane", "password": "a-long-enough-pass", "role": "operator"},
+        headers=admin,
+    )
     assert r.status_code == 201
-    assert api.post("/api/v1/users", json={"username": "x1y", "password": "short", "role": "viewer"},
-                    headers=admin).status_code == 422
+    assert (
+        api.post(
+            "/api/v1/users", json={"username": "x1y", "password": "short", "role": "viewer"}, headers=admin
+        ).status_code
+        == 422
+    )
     jane = api.post("/api/v1/auth/login", json={"username": "sre.jane", "password": "a-long-enough-pass"}).json()
     hdr = {"Authorization": f"Bearer {jane['access_token']}"}
     assert api.get("/api/v1/status", headers=hdr).status_code == 200

@@ -101,8 +101,10 @@ class PostgresEndpoint:
 
     def published_tables(self) -> list[tuple[str, str]]:
         with self._conn() as c:
-            return [(r[0], r[1]) for r in c.execute("SELECT schemaname, tablename FROM pg_publication_tables "
-                                                       "WHERE pubname = %s", (PUB,))]
+            return [
+                (r[0], r[1])
+                for r in c.execute("SELECT schemaname, tablename FROM pg_publication_tables WHERE pubname = %s", (PUB,))
+            ]
 
     def truncate(self, tables: list[tuple[str, str]]) -> None:
         if not tables:

@@ -1,0 +1,51 @@
+groups:
+  - name: lifeboat-dr
+    rules:
+      - alert: ActiveRegionDown
+        expr: sum by (region) (lifeboat_region_status == 2 and on(region) lifeboat_active_region == 1) > 0
+        for: 0m
+        labels: { severity: critical }
+        annotations:
+          summary: "Region {{ $labels.region }} serving traffic is DOWN"
+          runbook_url: https://github.com/your-org/lifeboat/blob/main/docs/runbook.md#1-active-region-down
+      - alert: StandbyRegionDown
+        expr: sum by (region) (lifeboat_region_status == 2 and on(region) lifeboat_active_region == 0) > 0
+        for: 1m
+        labels: { severity: major }
+        annotations:
+          summary: "Standby region {{ $labels.region }} is DOWN - DR protection lost"
+      - alert: ReplicationLagAboveBudget
+        expr: max(lifeboat_replication_lag_seconds) > 15
+        for: 30s
+        labels: { severity: warning }
+        annotations:
+          summary: "Replication lag {{ $value | humanize }}s exceeds lag budget"
+      - alert: RpoExposureBreachesTarget
+        expr: lifeboat_rpo_exposure_seconds > 30
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "A failover now would lose {{ $value | humanize }}s of data (RPO target 30s)"
+      - alert: DrReadinessLow
+        expr: lifeboat_readiness_score < 60
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "DR readiness score {{ $value }} below 60"
+      - alert: NoRecentVerifiedBackup
+        expr: lifeboat_last_verified_backup_age_seconds > 3600
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Newest verified backup is older than 1h"
+      - alert: LastFailoverMissedRto
+        expr: lifeboat_last_rto_seconds{kind="failover"} > 300
+        labels: { severity: warning }
+        annotations:
+          summary: "Last measured failover RTO {{ $value }}s exceeded the 300s target"
+      - alert: DrEngineStalled
+        expr: rate(lifeboat_engine_tick_seconds_count[1m]) == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "DR engine has stopped ticking - detection is blind"

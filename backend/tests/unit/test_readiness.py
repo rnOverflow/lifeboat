@@ -50,3 +50,11 @@ def test_after_failover_protects_new_active_and_flags_fenced_standby():
 def test_rto_unproven_and_slow():
     comp = {c["key"]: c for c in readiness.compute(snapshot(measured_rto_s=[900.0]))["components"]}
     assert comp["rto"]["score"] == 0
+
+
+def test_active_region_down_is_blocker():
+    snap = snapshot(regions={"aws-us-east-1": region("aws-us-east-1", status="down", db_role="primary",
+                                                     designated="primary"),
+                             "azure-eastus": region("azure-eastus")})
+    r = readiness.compute(snap)
+    assert r["status"] != "ready" and any("is DOWN" in b for b in r["blockers"])

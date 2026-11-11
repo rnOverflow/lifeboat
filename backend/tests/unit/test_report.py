@@ -36,3 +36,13 @@ def test_slow_approval_and_rpo_breach_recommendations():
     recs = report.recommendations(r, m)
     assert any("approval" in x for x in recs) and any("RPO breached" in x for x in recs)
     assert "FAIL" in report.to_markdown(report.build_report(r, m, None))
+
+
+def test_customer_impact_ignores_previous_outages():
+    r = _run(10, 2.0, 2)
+    stale = {"last_outage": {"started_at": NOW.timestamp() - 3600, "duration_s": 4.2, "failed_writes": 4}}
+    assert report.customer_impact(r, stale)["duration_s"] == 0.0
+    ongoing = {"outage_started_at": NOW.timestamp() + 1, "outage_failed": 12}
+    ci = report.customer_impact(r, ongoing)
+    assert ci["duration_s"] == 14.0 and ci["failed_writes"] == 12
+    assert report.customer_impact(r, None) is None

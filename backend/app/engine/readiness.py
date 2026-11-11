@@ -122,6 +122,8 @@ def compute(snap: Snapshot) -> dict[str, Any]:
                 _component("rto", "Proven RTO", 15, 0, f"avg measured RTO {avg:.1f}s > target {p.rto_target_s}s")
             )
 
+    if snap.active.status == "down":
+        blockers.append(f"Active region {snap.active.display_name} is DOWN - fail over to restore service")
     if snap.active_run:
         blockers.append(f"{snap.active_run['kind']} run #{snap.active_run['id']} in progress")
 
